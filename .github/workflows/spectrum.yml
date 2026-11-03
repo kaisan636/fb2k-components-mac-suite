@@ -1,0 +1,84 @@
+name: Build Spectrum Analyzer (macOS)
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'extensions/foo_jl_spectrum_mac/**'
+      - 'shared/**'
+      - '.github/workflows/spectrum.yml'
+    tags: ['spectrum-v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve latest foobar2000 SDK download URL
+        id: sdk
+        run: |
+          PAGE=$(curl -fsSL https://www.foobar2000.org/SDK)
+          URL=$(echo "$PAGE" | grep -oE 'href="[^"]*SDK[^"]*\.(7z|zip)"' | head -1 | sed 's/href="//; s/"//')
+          case "$URL" in
+            http*) ;;
+            /*) URL="https://www.foobar2000.org$URL" ;;
+          esac
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "SDK URL: $URL"
+
+      - name: Download and unpack SDK
+        run: |
+          brew install p7zip
+          curl -fsSL -o sdk.7z "${{ steps.sdk.outputs.url }}"
+          7z x -o./sdk-unpack sdk.7z >/dev/null
+          # Normalize: the generator expects the SDK at ./SDK-<date> with
+          # pfc/ and foobar2000/ directly inside. Find that root wherever the
+          # archive unpacked it.
+          ROOT=$(find sdk-unpack -type d -name pfc -maxdepth 4 | head -1 | xargs dirname)
+          echo "SDK root: $ROOT"
+          mv "$ROOT" ./SDK-2026-10-01
+          ls ./SDK-2026-10-01
+
+      - name: Build SDK libraries (required order)
+        run: |
+          set -e
+          SDK="$PWD/SDK-2026-10-01"
+          build_lib() {
+            local proj="$1" target="$2" subdir="$3"
+            echo "--- $target ---"
+            xcodebuild -project "$SDK/$subdir/$proj" -target "$target" \
+              -configuration Release SYMROOT="$SDK/$subdir/build" \
+              CODE_SIGNING_ALLOWED=NO build
+          }
+          build_lib pfc.xcodeproj pfc pfc
+          build_lib shared.xcodeproj shared foobar2000/shared
+          build_lib foobar2000_SDK.xcodeproj foobar2000_SDK foobar2000/SDK
+          build_lib foobar2000_SDK_helpers.xcodeproj foobar2000_SDK_helpers foobar2000/helpers
+          build_lib foobar2000_component_client.xcodeproj foobar2000_component_client foobar2000/foobar2000_component_client
+          find "$SDK" -name 'lib*.a' | sort
+
+      - name: Build component
+        run: |
+          cd extensions/foo_jl_spectrum_mac
+          ./Scripts/build.sh --release
+
+      - name: Package .fb2k-component
+        run: |
+          ./Scripts/package.sh spectrum
+          unzip -l foo_jl_spectrum.fb2k-component
+          file extensions/foo_jl_spectrum_mac/build/Release/foo_jl_spectrum.component/Contents/MacOS/foo_jl_spectrum
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foo_jl_spectrum.fb2k-component
+          path: foo_jl_spectrum.fb2k-component
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/spectrum-v')
+        run: |
+          gh release create "${{ github.ref_name }}" foo_jl_spectrum.fb2k-component \
+            --title "Spectrum Analyzer ${{ github.ref_name }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

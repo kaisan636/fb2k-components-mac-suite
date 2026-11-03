@@ -19,7 +19,30 @@ Contributed by [Scannou](https://github.com/Scannou).
 
 ## Quick Start
 
-### Build and Install
+### From Binary (this fork: prebuilt via CI)
+
+This fork builds the component on GitHub Actions (no local Xcode needed):
+
+1. Open the repo's **Actions → Build Spectrum Analyzer (macOS)**, run it with
+   **Run workflow** (or just push; it also runs automatically when this
+   extension's sources change).
+2. Download the artifact **`foo_jl_spectrum.fb2k-component`** from the run.
+3. Install and toggle the SPL readout:
+
+```bash
+unzip foo_jl_spectrum.fb2k-component
+xattr -dr com.apple.quarantine mac/foo_jl_spectrum.component
+mkdir -p ~/Library/foobar2000-v2/user-components/foo_jl_spectrum
+cp -R mac/foo_jl_spectrum.component ~/Library/foobar2000-v2/user-components/foo_jl_spectrum/
+# restart foobar2000, add the panel (View → Layout → Edit Layout, line `spectrum`),
+# then right-click the panel → "Show SPL Readout"
+```
+
+The attached `.fb2k-component` is the same signed-package layout the upstream
+releases use (a zip with `mac/foo_jl_spectrum.component` inside); the strip of
+the quarantine attribute is still needed because CI builds are unsigned.
+
+### Build and Install (local, needs Xcode)
 
 ```bash
 # From this directory
@@ -62,6 +85,23 @@ Layout names: `spectrum` (also `spectrum_analyzer`, `Spectrum Analyzer`, `foo_jl
 Access settings in **Preferences > Display > Spectrum Analyzer**, or right-click the element and choose **Preferences...**.
 
 See [docs/spectrum.md](../../docs/spectrum.md) for the full settings reference.
+
+### SPL Readout (this fork)
+
+Right-click the panel → **Show SPL Readout** to draw one line at the top-left:
+
+```
+SPL 71.3 dB · MAX 83.2 dB (−2.1 dBFS PK · −12.4 dBFS RMS)
+```
+
+- **SPL** is the broadband RMS loudness and **MAX** the highest true peak of
+  the current song (resets on track change, on stop, or via right-click →
+  "Reset SPL Peak"), converted with:
+  `SPL = calibration offset + level dBFS + playback volume dB`
+- The offset defaults to 96.0 dB SPL at 0 dBFS (headphone sensitivity 96 dB
+  SPL, digital full scale at 1.0 V). Tune it with the config-store key
+  `spl_offset_tenths` (0.1 dB steps, e.g. 960) after measuring your setup.
+- The meter only reads the visualisation stream; playback audio is untouched.
 
 ## Project Structure
 
