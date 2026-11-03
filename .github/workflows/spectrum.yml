@@ -12,7 +12,10 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # macos-13 (Intel) instead of macos-latest (arm64): the arm64 hosted pool
+    # sat at capacity and cancelled two queued builds (Nov 2026); Xcode on
+    # Intel cross-compiles the same universal (x86_64 + arm64) binary.
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
 
