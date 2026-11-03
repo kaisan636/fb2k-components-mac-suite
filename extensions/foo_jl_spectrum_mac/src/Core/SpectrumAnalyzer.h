@@ -83,6 +83,9 @@ public:
         float heldPeakDb  = -120.0f;  // highest true peak since the last resetPeak()
         float avgDb       = -120.0f;  // power average of rmsDb since the last resetPeak()
         double avgSeconds = 0.0;      // audio time averaged so far
+        float aRmsDb      = -120.0f;  // A-weighted smoothed RMS (IEC 61672 curve)
+        float aAvgDb      = -120.0f;  // A-weighted session power average
+        float dosePercent = 0.0f;     // NIOSH cumulative dose, 100 % = 85 dB(A) / 8 h
     };
     const MeterState& meter() const { return _meter; }
 
@@ -117,7 +120,10 @@ private:
     MeterState _meter;
     int _frameCount = 0;          // valid samples of the latest FFT frame
     float _meterPow = 0.0f;       // smoothed broadband power
+    float _meterAPow = 0.0f;      // smoothed A-weighted broadband power
+    float _frameAPowRatio = 0.0f; // weighted/broadband power ratio of the latest frame
     double _avgPowSum = 0.0;      // running power sum for the average (watts-s)
+    double _aAvgPowSum = 0.0;     // A-weighted running power sum
     double _avgTime = 0.0;        // seconds of audio accumulated
     service_ptr_t<visualisation_stream_v2> _stream;
     double _backlogSec = 0.0;     // history requested from the stream

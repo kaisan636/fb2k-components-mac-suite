@@ -5,6 +5,16 @@ All notable changes to Spectrum Analyzer will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **A-weighted SPL** (IEC 61672, computed per FFT bin): AVG and the live SPL
+  are now dB(A), directly comparable with the NIOSH 85 dB(A) exposure limit
+  and with phone SPL apps. MAX stays unweighted (true peak). Warning colours
+  now key off the A-weighted reading.
+- **NIOSH session dose**: `DOSE` shows the cumulative exposure percent since
+  the last reset — 100 % = 85 dB(A) for 8 hours, halved per +3 dB; levels
+  below 80 dB(A) do not accumulate.
+- **AVG is now the primary number**, followed by the live SPL, MAX and DOSE.
+- **Unambiguous peak parenthetical**: shows `held` and `now` true-peak dBFS
+  separately (they refer to different moments of the song).
 - **SPL readout overlay** (right-click → "Show SPL Readout"): one line at the
   top-left showing broadband RMS in dB SPL, the session power **AVG** and the
   held **MAX** (true peak) since the last reset, plus raw dBFS readings.

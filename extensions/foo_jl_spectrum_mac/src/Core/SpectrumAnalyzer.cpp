@@ -52,6 +52,21 @@ namespace {
         const float f = (float)v;
         return std::fabs(f) <= 1000.0f ? f : 0.0f;
     }
+
+    // A-weighting POWER gain at f Hz (IEC 61672 magnitude curve, 0 dB at
+    // 1 kHz). Applied per FFT bin: the weighted/broadband power ratio of a
+    // frame is sum(mag^2 * A(f)^2) / sum(mag^2), where the FFT window
+    // scaling cancels out. Convert with A_dB = 20 log10(A) + 2.00.
+    inline double aWeightPowerGain(double f) {
+        const double f2 = f * f;
+        const double num = 12194.0 * 12194.0 * f2 * f2;
+        const double den = (f2 + 20.6 * 20.6)
+                         * std::sqrt(f2 + 107.7 * 107.7)
+                         * std::sqrt(f2 + 737.9 * 737.9)
+                         * (f2 + 12194.0 * 12194.0);
+        const double ampDb = 2.00 + 20.0 * std::log10(std::max(num / den, 1e-300));
+        return std::pow(10.0, ampDb / 10.0);
+    }
 }
 
 SpectrumAnalyzer::SpectrumAnalyzer() {
@@ -336,7 +351,10 @@ void SpectrumAnalyzer::resetPeak() {
     _meter.heldPeakDb = -120.0f;
     _meter.avgDb = -120.0f;
     _meter.avgSeconds = 0.0;
+    _meter.aAvgDb = -120.0f;
+    _meter.dosePercent = 0.0f;
     _avgPowSum = 0.0;
+    _aAvgPowSum = 0.0;
     _avgTime = 0.0;
 }
 
@@ -365,10 +383,27 @@ void SpectrumAnalyzer::updateMeter(bool live, float rmsKeep) {
         _meter.avgSeconds = _avgTime;
         _meter.avgDb = _avgTime > 0.0 ? 10.0f * std::log10(std::max(_avgPowSum / _avgTime, 1e-12))
                                       : -120.0f;
+        // A-weighted readings share the same smoothing and averaging as the
+        // broadband ones, with the frame's weighted/broadband power ratio.
+        const float frameARms = frameRms * _frameAPowRatio;
+        _meterAPow = _meterAPow * rmsKeep + frameARms * (1.0f - rmsKeep);
+        _meter.aRmsDb = 10.0f * std::log10(std::max(_meterAPow, 1e-12f));
+        _aAvgPowSum += (double)frameARms * frameSec;
+        _meter.aAvgDb = _avgTime > 0.0 ? 10.0f * std::log10(std::max(_aAvgPowSum / _avgTime, 1e-12))
+                                       : -120.0f;
+        // NIOSH exposure dose: 100 % = 85 dB(A) for 8 hours, halving the
+        // allowed time per +3 dB; levels below 80 dB(A) do not accumulate.
+        const double la = (double)_meter.aRmsDb;
+        if (la >= 80.0) {
+            const double allowSec = 480.0 * 3600.0 * std::pow(2.0, (85.0 - la) / 3.0);
+            _meter.dosePercent += (float)(100.0 * frameSec / allowSec);
+        }
     } else if (!live) {
         // Silence: run the smoothed reading down, keep the held peak and average.
         _meterPow *= rmsKeep;
         _meter.rmsDb = 10.0f * std::log10(std::max(_meterPow, 1e-12f));
+        _meterAPow *= rmsKeep;
+        _meter.aRmsDb = 10.0f * std::log10(std::max(_meterAPow, 1e-12f));
         _meter.frameRmsDb = _meter.truePeakDb = -120.0f;
     }
 }
@@ -567,6 +602,20 @@ bool SpectrumAnalyzer::tick(double dt) {
 
     if (gotData) {
         computeSpectrum(_mid, _binMag);
+        // A-weighting ratio from the fresh spectrum, BEFORE updateLayer()
+        // smooths the bins: weighted / broadband frame power. The FFT window
+        // scaling is identical in numerator and denominator, so it cancels.
+        {
+            double sum = 0.0, wsum = 0.0;
+            const double sr = _lastSampleRate > 0 ? _lastSampleRate : 44100.0;
+            const int nBins = (int)_binMag.size();
+            for (int b = 1; b < nBins; ++b) {   // bin 0 is packed DC, always 0
+                const double p = (double)_binMag[(size_t)b] * (double)_binMag[(size_t)b];
+                sum += p;
+                wsum += p * aWeightPowerGain((double)b * sr / (double)_settings.fftSize);
+            }
+            _frameAPowRatio = sum > 1e-30 ? (float)(wsum / sum) : 0.0f;
+        }
         if (wantSide) computeSpectrum(_side, _binMagSide);
     }
     updateLayer(_bars, _binMag, _binPow, gotData, binCount, attackKeep, decayKeep, rmsKeep);

@@ -53,17 +53,22 @@ NS_ASSUME_NONNULL_BEGIN
                side:(const float * _Nullable)side
               count:(NSInteger)count;
 
-// SPL readout overlay (drawn top-left when shown). RMS, AVG and held-peak SPL
-// already include the calibration offset and playback volume; truePeakDb and
-// rmsDbFS are raw dBFS readings. warnSPL (>= 50) colours the line amber at
-// that SPL and red 5 dB above it.
+// SPL readout overlay (drawn top-left when shown). All SPL values already
+// include the calibration offset and playback volume. avgSPL/rmsSPL are
+// A-weighted (IEC 61672), flatSPL and peakSPL are unweighted. heldPeakDbFS is
+// the dBFS level behind the held MAX and truePeakDb the current frame's peak
+// (the parenthetical disambiguates held vs now). dosePct is the NIOSH
+// cumulative session dose. warnSPL (>= 50) colours the line amber at that
+// A-weighted SPL and red 5 dB above it.
 - (void)setSplReadout:(BOOL)show
-                rmsSPL:(float)rmsSPL
-                avgSPL:(float)avgSPL
-               peakSPL:(float)peakSPL
-            truePeakDb:(float)truePeakDb
-               rmsDbFS:(float)rmsDbFS
-               warnSPL:(float)warnSPL;
+               avgSPL:(float)avgSPL
+               rmsSPL:(float)rmsSPL
+              flatSPL:(float)flatSPL
+              peakSPL:(float)peakSPL
+         heldPeakDbFS:(float)heldPeakDbFS
+           truePeakDb:(float)truePeakDb
+              dosePct:(float)dosePct
+              warnSPL:(float)warnSPL;
 
 @end
 

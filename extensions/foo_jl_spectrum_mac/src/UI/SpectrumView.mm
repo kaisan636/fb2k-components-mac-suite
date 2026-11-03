@@ -66,12 +66,14 @@
 
     // SPL readout overlay (top-left when shown).
     BOOL     _splShow;
-    float    _splRms;       // dB SPL, calibration + volume included
-    float    _splAvg;       // dB SPL session power average
-    float    _splPeak;      // dB SPL held peak
-    float    _splTruePeakDb; // raw true peak, dBFS
-    float    _splRmsDbFS;   // raw smoothed RMS, dBFS
-    float    _splWarn;      // amber threshold in dB SPL (<= 0 disables)
+    float    _splAvgA;      // dB SPL(A), session power average (primary)
+    float    _splRmsA;      // dB SPL(A), live smoothed
+    float    _splFlat;      // dB SPL, live unweighted
+    float    _splPeak;      // dB SPL held true peak (unweighted)
+    float    _splHeldPeakDbFS; // dBFS level behind the held MAX
+    float    _splTruePeakDb;   // current frame true peak, dBFS
+    float    _splDose;      // NIOSH session dose, percent
+    float    _splWarn;      // amber threshold in dB SPL(A) (<= 0 disables)
 
     // Readout under the mouse while it is over the plot.
     BOOL     _hovering;
@@ -1278,18 +1280,22 @@ static NSString *noteName(double f) {
 #pragma mark - SPL readout
 
 - (void)setSplReadout:(BOOL)show
-                rmsSPL:(float)rmsSPL
-                avgSPL:(float)avgSPL
-               peakSPL:(float)peakSPL
-            truePeakDb:(float)truePeakDb
-               rmsDbFS:(float)rmsDbFS
-               warnSPL:(float)warnSPL {
+               avgSPL:(float)avgSPL
+               rmsSPL:(float)rmsSPL
+              flatSPL:(float)flatSPL
+              peakSPL:(float)peakSPL
+         heldPeakDbFS:(float)heldPeakDbFS
+           truePeakDb:(float)truePeakDb
+              dosePct:(float)dosePct
+              warnSPL:(float)warnSPL {
     _splShow = show;
-    _splRms = rmsSPL;
-    _splAvg = avgSPL;
+    _splAvgA = avgSPL;
+    _splRmsA = rmsSPL;
+    _splFlat = flatSPL;
     _splPeak = peakSPL;
+    _splHeldPeakDbFS = heldPeakDbFS;
     _splTruePeakDb = truePeakDb;
-    _splRmsDbFS = rmsDbFS;
+    _splDose = dosePct;
     _splWarn = warnSPL;
 }
 
@@ -1304,25 +1310,28 @@ static NSString *noteName(double f) {
     NSDictionary *inkAttrs = textAttrs(font, ink);
     NSDictionary *dimAttrs = textAttrs(font, [ink colorWithAlphaComponent:0.55]);
 
-    NSString *rms = _splRms <= -99.0f ? @"  --  "
-                                      : [NSString stringWithFormat:@"%.1f", (double)_splRms];
-    NSString *avg = _splAvg <= -99.0f ? @"  --  "
-                                      : [NSString stringWithFormat:@"%.1f", (double)_splAvg];
+    NSString *rms = _splRmsA <= -99.0f ? @"  --  "
+                                      : [NSString stringWithFormat:@"%.1f", (double)_splRmsA];
+    NSString *avg = _splAvgA <= -99.0f ? @"  --  "
+                                      : [NSString stringWithFormat:@"%.1f", (double)_splAvgA];
     NSString *peak = _splPeak <= -99.0f ? @"  --  "
                                         : [NSString stringWithFormat:@"%.1f", (double)_splPeak];
-    NSMutableAttributedString *text = [[NSMutableAttributedString alloc] initWithString:@"SPL " attributes:dimAttrs];
-    [text appendAttributedString:[[NSAttributedString alloc] initWithString:rms attributes:inkAttrs]];
-    [text appendAttributedString:[[NSAttributedString alloc]
-        initWithString:@" dB · AVG " attributes:dimAttrs]];
+    NSMutableAttributedString *text = [[NSMutableAttributedString alloc] initWithString:@"AVG " attributes:dimAttrs];
     [text appendAttributedString:[[NSAttributedString alloc] initWithString:avg attributes:inkAttrs]];
+    [text appendAttributedString:[[NSAttributedString alloc]
+        initWithString:@" dB(A) · SPL " attributes:dimAttrs]];
+    [text appendAttributedString:[[NSAttributedString alloc] initWithString:rms attributes:inkAttrs]];
     [text appendAttributedString:[[NSAttributedString alloc]
         initWithString:@" · MAX " attributes:dimAttrs]];
     [text appendAttributedString:[[NSAttributedString alloc] initWithString:peak attributes:inkAttrs]];
-    [text appendAttributedString:[[NSAttributedString alloc] initWithString:@" dB" attributes:inkAttrs]];
+    [text appendAttributedString:[[NSAttributedString alloc]
+        initWithString:@" dB · DOSE " attributes:dimAttrs]];
+    [text appendAttributedString:[[NSAttributedString alloc]
+        initWithString:[NSString stringWithFormat:@"%.1f%%", (double)_splDose] attributes:inkAttrs]];
     if (_splTruePeakDb > -99.0f) {
         [text appendAttributedString:[[NSAttributedString alloc]
-            initWithString:[NSString stringWithFormat:@" (%.1f dBFS PK · %.1f dBFS RMS)",
-                                                     (double)_splTruePeakDb, (double)_splRmsDbFS]
+            initWithString:[NSString stringWithFormat:@" (held %.1f · now %.1f dBFS PK)",
+                                                     (double)_splHeldPeakDbFS, (double)_splTruePeakDb]
                              attributes:dimAttrs]];
     }
 
@@ -1330,10 +1339,10 @@ static NSString *noteName(double f) {
     if (_splWarn >= 50.0f) {
         NSColor *warnColor = nil;
         NSString *warnTag = nil;
-        if (_splRms >= _splWarn + 5.0f) {
+        if (_splRmsA >= _splWarn + 5.0f) {
             warnColor = NSColor.systemRedColor;
             warnTag = @"  ⚠️ HIGH";
-        } else if (_splRms >= _splWarn) {
+        } else if (_splRmsA >= _splWarn) {
             warnColor = NSColor.systemOrangeColor;
             warnTag = @"  ⚠";
         }

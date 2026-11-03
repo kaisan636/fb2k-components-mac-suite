@@ -331,6 +331,8 @@ static const CFTimeInterval kMinTickInterval = 0.0105;
 
         // SPL readout: displayed SPL = calibration offset + level dBFS + the
         // playback volume in dB (fb2k reports 0..-100, mute as -10000).
+        // AVG/SPL are A-weighted (comparable with NIOSH 85 dB(A)); MAX is the
+        // unweighted held true peak.
         if (spectrum_config::getSplShow()) {
             float volDb = 0.0f;
             try {
@@ -341,11 +343,13 @@ static const CFTimeInterval kMinTickInterval = 0.0105;
             const SpectrumAnalyzer::MeterState &m = _analyzer->meter();
             const float off = spectrum_config::getSplOffsetDb();
             [self.spectrumView setSplReadout:YES
-                                      rmsSPL:off + m.rmsDb + volDb
-                                      avgSPL:off + m.avgDb + volDb
+                                      avgSPL:off + m.aAvgDb + volDb
+                                      rmsSPL:off + m.aRmsDb + volDb
+                                     flatSPL:off + m.rmsDb + volDb
                                      peakSPL:off + m.heldPeakDb + volDb
+                                heldPeakDbFS:m.heldPeakDb
                                   truePeakDb:m.truePeakDb
-                                     rmsDbFS:m.rmsDb
+                                     dosePct:m.dosePercent
                                      warnSPL:(float)spectrum_config::getSplWarnDb()];
         }
 
