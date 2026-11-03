@@ -329,6 +329,24 @@ static const CFTimeInterval kMinTickInterval = 0.0105;
         self.spectrumView.playing = live;
         if (live) [self.spectrumView setSampleRate:_analyzer->sampleRate()];
 
+        // SPL readout: displayed SPL = calibration offset + level dBFS + the
+        // playback volume in dB (fb2k reports 0..-100, mute as -10000).
+        if (spectrum_config::getSplShow()) {
+            float volDb = 0.0f;
+            try {
+                auto pc = playback_control::get();
+                if (pc.is_valid()) volDb = pc->get_volume();
+            } catch (...) {}
+            if (volDb < -100.0f) volDb = -100.0f;
+            const SpectrumAnalyzer::MeterState &m = _analyzer->meter();
+            const float off = spectrum_config::getSplOffsetDb();
+            [self.spectrumView setSplReadout:YES
+                                      rmsSPL:off + m.rmsDb + volDb
+                                     peakSPL:off + m.heldPeakDb + volDb
+                                  truePeakDb:m.truePeakDb
+                                     rmsDbFS:m.rmsDb];
+        }
+
         // Redraw while there is live audio or bars/peaks are still settling.
         if (live || _analyzer->isActive()) {
             const auto &bars = _analyzer->bars();
@@ -365,7 +383,32 @@ static const CFTimeInterval kMinTickInterval = 0.0105;
                                             keyEquivalent:@""];
     prefs.target = self;
     [menu addItem:prefs];
+    [menu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *spl = [[NSMenuItem alloc] initWithTitle:@"Show SPL Readout"
+                                                 action:@selector(menuToggleSplReadout:)
+                                          keyEquivalent:@""];
+    spl.target = self;
+    spl.state = spectrum_config::getSplShow() ? NSControlStateValueOn : NSControlStateValueOff;
+    [menu addItem:spl];
+    NSMenuItem *resetPeak = [[NSMenuItem alloc] initWithTitle:@"Reset SPL Peak"
+                                                       action:@selector(menuResetSplPeak:)
+                                                keyEquivalent:@""];
+    resetPeak.target = self;
+    [menu addItem:resetPeak];
     [menu popUpMenuPositioningItem:nil atLocation:point inView:view];
+}
+
+- (void)menuToggleSplReadout:(NSMenuItem *)sender {
+    spectrum_config::setSplShow(!spectrum_config::getSplShow());
+}
+
+- (void)menuResetSplPeak:(NSMenuItem *)sender {
+    [self resetTrackPeak];
+}
+
+// New track / stop / manual reset all land here.
+- (void)resetTrackPeak {
+    if (_analyzer) _analyzer->resetPeak();
 }
 
 - (void)spectrumViewDidMoveToWindow:(SpectrumView *)view {
@@ -436,3 +479,33 @@ static const CFTimeInterval kMinTickInterval = 0.0105;
 }
 
 @end
+
+// Reset the held SPL peak when the track changes or playback stops, so MAX
+// always refers to the current song. Iterates the same live-controller
+// registry the quit handler uses.
+class spl_play_callback : public play_callback_static {
+public:
+    unsigned get_flags() override {
+        return flag_on_playback_new_track | flag_on_playback_stop;
+    }
+    void on_playback_new_track(metadb_handle_ptr) override { resetAll(); }
+    void on_playback_stop(play_control::stop_reason) override { resetAll(); }
+    void on_playback_starting(play_control::t_track_command, bool) override {}
+    void on_playback_seek(double) override {}
+    void on_playback_pause(bool) override {}
+    void on_playback_edited(metadb_handle_ptr) override {}
+    void on_playback_dynamic_info(const file_info &) override {}
+    void on_playback_dynamic_info_track(const file_info &) override {}
+    void on_playback_time(double) override {}
+    void on_volume_change(float) override {}
+
+private:
+    static void resetAll() {
+        std::lock_guard<std::mutex> lock(g_controllersMutex);
+        for (__weak SpectrumController *w : g_controllers) {
+            SpectrumController *c = w;
+            if (c) [c resetTrackPeak];
+        }
+    }
+};
+FB2K_SERVICE_FACTORY(spl_play_callback);

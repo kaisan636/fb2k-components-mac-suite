@@ -139,6 +139,11 @@ constexpr int      kDefaultTheme = 12;           // Color preset index (0 = Cust
 constexpr bool     kDefaultGlassBackground = false;
 constexpr int      kDefaultStereoMode = StereoMono;
 constexpr int      kDefaultWindow     = WindowBlackmanHarris;
+// SPL readout overlay. The offset is the calibrated dB SPL the headphones
+// produce at 0 dBFS digital full scale, in 0.1 dB steps (960 = 96.0 dB SPL);
+// displayed SPL = offset + level dBFS + playback volume dB.
+constexpr bool     kDefaultSplShow        = false;
+constexpr int      kDefaultSplOffsetTenths = 960;
 constexpr int      kFftSizes[]        = { 1024, 2048, 4096, 8192, 16384, 32768 };
 constexpr int      kDefaultCurveOctaveFraction = 0;  // Curve detail: 0 = full, N = 1/N-octave smoothing
 constexpr int      kCurveOctaveFractions[] = { 0, 24, 12, 6, 3 };  // popup order
@@ -196,6 +201,8 @@ static const char* const kKeyBarColorLight  = "bar_color_light";
 static const char* const kKeyBgColorLight   = "bg_color_light";
 static const char* const kKeyBarColorDark   = "bar_color_dark";
 static const char* const kKeyBgColorDark    = "bg_color_dark";
+static const char* const kKeySplShow        = "spl_show";
+static const char* const kKeySplOffsetTenths = "spl_offset_tenths";
 
 // Notification posted when preferences change so live views can reload.
 // Guarded so this header stays includable from pure C++ translation units.
@@ -291,6 +298,19 @@ inline int getCurveOctaveFraction() {
         if (fraction == choice) return choice;
     }
     return kDefaultCurveOctaveFraction;
+}
+
+// SPL readout overlay on/off.
+inline bool getSplShow() {
+    return getConfigBool(kKeySplShow, kDefaultSplShow);
+}
+
+// Calibration offset in dB SPL at 0 dBFS, from the stored 0.1 dB steps.
+inline float getSplOffsetDb() {
+    return (float)getConfigInt(kKeySplOffsetTenths, kDefaultSplOffsetTenths) / 10.0f;
+}
+inline void setSplShow(bool show) {
+    setConfigBool(kKeySplShow, show);
 }
 
 } // namespace spectrum_config

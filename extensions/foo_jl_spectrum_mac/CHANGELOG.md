@@ -2,6 +2,17 @@
 
 All notable changes to Spectrum Analyzer will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **SPL readout overlay** (right-click → "Show SPL Readout"): one line at the
+  top-left showing broadband RMS in dB SPL and the held MAX (true peak) since
+  the last reset, plus raw dBFS readings. Displayed SPL = calibration offset +
+  level dBFS + playback volume dB; the offset defaults to 96.0 dB SPL at
+  0 dBFS (`spl_offset_tenths` in the config store). The MAX resets on track
+  change, on stop, or via right-click → "Reset SPL Peak". The meter reads the
+  visualisation stream only, so playback is never touched.
+
 ## [1.1.0] - 2026-10-30
 
 Display P3 colors contributed by @Scannou (#55).

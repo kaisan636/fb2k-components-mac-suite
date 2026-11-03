@@ -73,6 +73,20 @@ public:
     // Side-channel level (0..1) per bar in Mid + side mode, else empty.
     const std::vector<float>& side() const { return _sideBars; }
 
+    // Broadband loudness meter, updated by tick() alongside the spectrum.
+    // All values in dBFS (0 = digital full scale). No DSP chain involvement:
+    // this only reads the visualisation stream, so playback is never touched.
+    struct MeterState {
+        float frameRmsDb  = -120.0f;  // RMS of the latest FFT frame
+        float rmsDb       = -120.0f;  // time-smoothed RMS (settings.rmsMs)
+        float truePeakDb  = -120.0f;  // max |sample| of the latest frame
+        float heldPeakDb  = -120.0f;  // highest true peak since the last resetPeak()
+    };
+    const MeterState& meter() const { return _meter; }
+
+    // Forget the held true-peak maximum (new track, or manual reset).
+    void resetPeak();
+
     // True while any bar or peak is still above zero (view keeps redrawing).
     bool isActive() const { return _active; }
 
@@ -94,8 +108,13 @@ private:
                      bool live, int binCount, float attackKeep, float decayKeep, float rmsKeep);
     void updatePeaks(double dtSec);
     void clearPeakHistory();
+    // Advance the broadband meter from the frame readAudio() left in _mid.
+    void updateMeter(bool live, float rmsKeep);
 
     Settings _settings;
+    MeterState _meter;
+    int _frameCount = 0;          // valid samples of the latest FFT frame
+    float _meterPow = 0.0f;       // smoothed broadband power
     service_ptr_t<visualisation_stream_v2> _stream;
     double _backlogSec = 0.0;     // history requested from the stream
     audio_chunk_impl _chunk;      // reused by readAudio (up to fftSize x channels)

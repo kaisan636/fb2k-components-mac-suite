@@ -64,6 +64,13 @@
 
     BOOL     _freqAxisDrawn;  // frequency labels drawn this frame
 
+    // SPL readout overlay (top-left when shown).
+    BOOL     _splShow;
+    float    _splRms;       // dB SPL, calibration + volume included
+    float    _splPeak;      // dB SPL held peak
+    float    _splTruePeakDb; // raw true peak, dBFS
+    float    _splRmsDbFS;   // raw smoothed RMS, dBFS
+
     // Readout under the mouse while it is over the plot.
     BOOL     _hovering;
     NSPoint  _hoverPoint;
@@ -394,6 +401,7 @@ static const CGFloat kPeakLineAlpha = 0.45;
     CGContextSaveGState(ctx);
     @try {
         [self drawSpectrum];
+        [self drawSplReadout];
     } @catch (NSException *e) {
         NSLog(@"foo_jl_spectrum: drawing failed: %@", e);
     }
@@ -1263,6 +1271,62 @@ static NSString *noteName(double f) {
     _hovering = NO;
     [self setNeedsDisplay:YES];
     [super mouseExited:event];
+}
+
+#pragma mark - SPL readout
+
+- (void)setSplReadout:(BOOL)show
+                rmsSPL:(float)rmsSPL
+               peakSPL:(float)peakSPL
+            truePeakDb:(float)truePeakDb
+               rmsDbFS:(float)rmsDbFS {
+    _splShow = show;
+    _splRms = rmsSPL;
+    _splPeak = peakSPL;
+    _splTruePeakDb = truePeakDb;
+    _splRmsDbFS = rmsDbFS;
+}
+
+// One line at the top-left of the plot: broadband SPL, the highest peak since
+// the last reset (track change or context menu), and the raw dBFS readings.
+- (void)drawSplReadout {
+    if (!_splShow) return;
+    NSColor *ink = NSColor.labelColor;
+    NSColor *bg = NSColor.textBackgroundColor;
+    NSFont *font = labelFont(NSFontWeightMedium);
+    NSDictionary *inkAttrs = textAttrs(font, ink);
+    NSDictionary *dimAttrs = textAttrs(font, [ink colorWithAlphaComponent:0.55]);
+
+    NSString *rms = _splRms <= -99.0f ? @"  --  "
+                                      : [NSString stringWithFormat:@"%.1f", (double)_splRms];
+    NSString *peak = _splPeak <= -99.0f ? @"  --  "
+                                        : [NSString stringWithFormat:@"%.1f", (double)_splPeak];
+    NSMutableAttributedString *text = [[NSMutableAttributedString alloc] initWithString:@"SPL " attributes:dimAttrs];
+    [text appendAttributedString:[[NSAttributedString alloc] initWithString:rms attributes:inkAttrs]];
+    [text appendAttributedString:[[NSAttributedString alloc]
+        initWithString:@" dB · MAX " attributes:dimAttrs]];
+    [text appendAttributedString:[[NSAttributedString alloc] initWithString:peak attributes:inkAttrs]];
+    [text appendAttributedString:[[NSAttributedString alloc] initWithString:@" dB" attributes:inkAttrs]];
+    if (_splTruePeakDb > -99.0f) {
+        [text appendAttributedString:[[NSAttributedString alloc]
+            initWithString:[NSString stringWithFormat:@" (%.1f dBFS PK · %.1f dBFS RMS)",
+                                                     (double)_splTruePeakDb, (double)_splRmsDbFS]
+                             attributes:dimAttrs]];
+    }
+
+    const NSSize sz = text.size;
+    const CGFloat padX = 8.0, padY = 4.0;
+    const CGFloat w = std::ceil(sz.width) + 2 * padX, h = std::ceil(sz.height) + 2 * padY;
+    const NSRect bounds = self.bounds;
+    if (bounds.size.width < w + 8.0 || bounds.size.height < h + 8.0) return;
+    const NSRect pill = NSMakeRect(6.0, bounds.size.height - h - 6.0, w, h);
+    NSBezierPath *path = [NSBezierPath bezierPathWithRoundedRect:pill xRadius:5 yRadius:5];
+    [[bg colorWithAlphaComponent:0.75] setFill];
+    [path fill];
+    path.lineWidth = 1.0;
+    [[ink colorWithAlphaComponent:0.15] setStroke];
+    [path stroke];
+    [text drawAtPoint:NSMakePoint(pill.origin.x + padX, pill.origin.y + padY)];
 }
 
 #pragma mark - Context menu

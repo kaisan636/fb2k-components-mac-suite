@@ -53,6 +53,15 @@ NS_ASSUME_NONNULL_BEGIN
                side:(const float * _Nullable)side
               count:(NSInteger)count;
 
+// SPL readout overlay (drawn top-left when shown). RMS and held peak already
+// include the calibration offset and playback volume; truePeakDb and rmsDbFS
+// are raw dBFS readings.
+- (void)setSplReadout:(BOOL)show
+                rmsSPL:(float)rmsSPL
+               peakSPL:(float)peakSPL
+            truePeakDb:(float)truePeakDb
+               rmsDbFS:(float)rmsDbFS;
+
 @end
 
 NS_ASSUME_NONNULL_END

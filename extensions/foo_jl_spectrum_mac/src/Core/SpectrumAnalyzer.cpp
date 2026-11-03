@@ -328,7 +328,36 @@ bool SpectrumAnalyzer::readAudio(double t) {
     // A short chunk (start of a track) is zero-padded.
     std::fill(_mid.begin() + (long)count, _mid.end(), 0.0f);
     if (wantSide) std::fill(_side.begin() + (long)count, _side.end(), 0.0f);
+    _frameCount = (int)count;
     return true;
+}
+
+void SpectrumAnalyzer::resetPeak() {
+    _meter.heldPeakDb = -120.0f;
+}
+
+void SpectrumAnalyzer::updateMeter(bool live, float rmsKeep) {
+    if (live && _frameCount > 0) {
+        // Broadband RMS and true peak of the frame readAudio() left in _mid.
+        float ss = 0.0f, peak = 0.0f;
+        for (int i = 0; i < _frameCount; ++i) {
+            const float v = _mid[(size_t)i];
+            ss += v * v;
+            const float a = std::fabs(v);
+            if (a > peak) peak = a;
+        }
+        _meter.frameRmsDb = 10.0f * std::log10(std::max(ss / (float)_frameCount, 1e-12f));
+        _meter.truePeakDb = peak > 0.0f ? 20.0f * std::log10(peak) : -120.0f;
+        // One-pole average of power, same time constant as RMS mode.
+        _meterPow = _meterPow * rmsKeep + (ss / (float)_frameCount) * (1.0f - rmsKeep);
+        _meter.rmsDb = 10.0f * std::log10(std::max(_meterPow, 1e-12f));
+        if (_meter.truePeakDb > _meter.heldPeakDb) _meter.heldPeakDb = _meter.truePeakDb;
+    } else if (!live) {
+        // Silence: run the smoothed reading down, keep the held peak.
+        _meterPow *= rmsKeep;
+        _meter.rmsDb = 10.0f * std::log10(std::max(_meterPow, 1e-12f));
+        _meter.frameRmsDb = _meter.truePeakDb = -120.0f;
+    }
 }
 
 void SpectrumAnalyzer::computeSpectrum(const std::vector<float>& in, std::vector<float>& mag) {
@@ -529,6 +558,7 @@ bool SpectrumAnalyzer::tick(double dt) {
     }
     updateLayer(_bars, _binMag, _binPow, gotData, binCount, attackKeep, decayKeep, rmsKeep);
     if (wantSide) updateLayer(_sideBars, _binMagSide, _binPowSide, gotData, binCount, attackKeep, decayKeep, rmsKeep);
+    updateMeter(gotData, rmsKeep);
 
     // Three timescales, each rising instantly to the bar and falling slower
     // than the layer beneath it: bar (fast) < shadow (medium) < peak (slowest).
