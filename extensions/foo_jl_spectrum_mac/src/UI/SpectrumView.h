@@ -53,14 +53,17 @@ NS_ASSUME_NONNULL_BEGIN
                side:(const float * _Nullable)side
               count:(NSInteger)count;
 
-// SPL readout overlay (drawn top-left when shown). RMS and held peak already
-// include the calibration offset and playback volume; truePeakDb and rmsDbFS
-// are raw dBFS readings.
+// SPL readout overlay (drawn top-left when shown). RMS, AVG and held-peak SPL
+// already include the calibration offset and playback volume; truePeakDb and
+// rmsDbFS are raw dBFS readings. warnSPL (>= 50) colours the line amber at
+// that SPL and red 5 dB above it.
 - (void)setSplReadout:(BOOL)show
                 rmsSPL:(float)rmsSPL
+                avgSPL:(float)avgSPL
                peakSPL:(float)peakSPL
             truePeakDb:(float)truePeakDb
-               rmsDbFS:(float)rmsDbFS;
+               rmsDbFS:(float)rmsDbFS
+               warnSPL:(float)warnSPL;
 
 @end
 

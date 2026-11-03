@@ -81,6 +81,8 @@ public:
         float rmsDb       = -120.0f;  // time-smoothed RMS (settings.rmsMs)
         float truePeakDb  = -120.0f;  // max |sample| of the latest frame
         float heldPeakDb  = -120.0f;  // highest true peak since the last resetPeak()
+        float avgDb       = -120.0f;  // power average of rmsDb since the last resetPeak()
+        double avgSeconds = 0.0;      // audio time averaged so far
     };
     const MeterState& meter() const { return _meter; }
 
@@ -115,6 +117,8 @@ private:
     MeterState _meter;
     int _frameCount = 0;          // valid samples of the latest FFT frame
     float _meterPow = 0.0f;       // smoothed broadband power
+    double _avgPowSum = 0.0;      // running power sum for the average (watts-s)
+    double _avgTime = 0.0;        // seconds of audio accumulated
     service_ptr_t<visualisation_stream_v2> _stream;
     double _backlogSec = 0.0;     // history requested from the stream
     audio_chunk_impl _chunk;      // reused by readAudio (up to fftSize x channels)

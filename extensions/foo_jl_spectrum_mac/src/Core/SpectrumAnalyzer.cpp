@@ -334,6 +334,10 @@ bool SpectrumAnalyzer::readAudio(double t) {
 
 void SpectrumAnalyzer::resetPeak() {
     _meter.heldPeakDb = -120.0f;
+    _meter.avgDb = -120.0f;
+    _meter.avgSeconds = 0.0;
+    _avgPowSum = 0.0;
+    _avgTime = 0.0;
 }
 
 void SpectrumAnalyzer::updateMeter(bool live, float rmsKeep) {
@@ -346,14 +350,23 @@ void SpectrumAnalyzer::updateMeter(bool live, float rmsKeep) {
             const float a = std::fabs(v);
             if (a > peak) peak = a;
         }
-        _meter.frameRmsDb = 10.0f * std::log10(std::max(ss / (float)_frameCount, 1e-12f));
+        const float frameRms = ss / (float)_frameCount;
+        _meter.frameRmsDb = 10.0f * std::log10(std::max(frameRms, 1e-12f));
         _meter.truePeakDb = peak > 0.0f ? 20.0f * std::log10(peak) : -120.0f;
         // One-pole average of power, same time constant as RMS mode.
-        _meterPow = _meterPow * rmsKeep + (ss / (float)_frameCount) * (1.0f - rmsKeep);
+        _meterPow = _meterPow * rmsKeep + frameRms * (1.0f - rmsKeep);
         _meter.rmsDb = 10.0f * std::log10(std::max(_meterPow, 1e-12f));
         if (_meter.truePeakDb > _meter.heldPeakDb) _meter.heldPeakDb = _meter.truePeakDb;
+        // Session average: mean power over everything since the last reset
+        // (track change or manual), in the audio-time domain.
+        const double frameSec = (double)_frameCount / std::max(1.0, _lastSampleRate);
+        _avgPowSum += (double)frameRms * frameSec;
+        _avgTime += frameSec;
+        _meter.avgSeconds = _avgTime;
+        _meter.avgDb = _avgTime > 0.0 ? 10.0f * std::log10(std::max(_avgPowSum / _avgTime, 1e-12))
+                                      : -120.0f;
     } else if (!live) {
-        // Silence: run the smoothed reading down, keep the held peak.
+        // Silence: run the smoothed reading down, keep the held peak and average.
         _meterPow *= rmsKeep;
         _meter.rmsDb = 10.0f * std::log10(std::max(_meterPow, 1e-12f));
         _meter.frameRmsDb = _meter.truePeakDb = -120.0f;

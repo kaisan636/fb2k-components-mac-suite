@@ -342,9 +342,11 @@ static const CFTimeInterval kMinTickInterval = 0.0105;
             const float off = spectrum_config::getSplOffsetDb();
             [self.spectrumView setSplReadout:YES
                                       rmsSPL:off + m.rmsDb + volDb
+                                      avgSPL:off + m.avgDb + volDb
                                      peakSPL:off + m.heldPeakDb + volDb
                                   truePeakDb:m.truePeakDb
-                                     rmsDbFS:m.rmsDb];
+                                     rmsDbFS:m.rmsDb
+                                     warnSPL:(float)spectrum_config::getSplWarnDb()];
         }
 
         // Redraw while there is live audio or bars/peaks are still settling.

@@ -67,9 +67,11 @@
     // SPL readout overlay (top-left when shown).
     BOOL     _splShow;
     float    _splRms;       // dB SPL, calibration + volume included
+    float    _splAvg;       // dB SPL session power average
     float    _splPeak;      // dB SPL held peak
     float    _splTruePeakDb; // raw true peak, dBFS
     float    _splRmsDbFS;   // raw smoothed RMS, dBFS
+    float    _splWarn;      // amber threshold in dB SPL (<= 0 disables)
 
     // Readout under the mouse while it is over the plot.
     BOOL     _hovering;
@@ -1277,18 +1279,23 @@ static NSString *noteName(double f) {
 
 - (void)setSplReadout:(BOOL)show
                 rmsSPL:(float)rmsSPL
+                avgSPL:(float)avgSPL
                peakSPL:(float)peakSPL
             truePeakDb:(float)truePeakDb
-               rmsDbFS:(float)rmsDbFS {
+               rmsDbFS:(float)rmsDbFS
+               warnSPL:(float)warnSPL {
     _splShow = show;
     _splRms = rmsSPL;
+    _splAvg = avgSPL;
     _splPeak = peakSPL;
     _splTruePeakDb = truePeakDb;
     _splRmsDbFS = rmsDbFS;
+    _splWarn = warnSPL;
 }
 
-// One line at the top-left of the plot: broadband SPL, the highest peak since
-// the last reset (track change or context menu), and the raw dBFS readings.
+// One line at the top-left of the plot: broadband SPL, session average and
+// held peak since the last reset, plus raw dBFS readings. The line turns
+// amber when the live SPL reaches the warning threshold and red 5 dB above.
 - (void)drawSplReadout {
     if (!_splShow) return;
     NSColor *ink = NSColor.labelColor;
@@ -1299,12 +1306,17 @@ static NSString *noteName(double f) {
 
     NSString *rms = _splRms <= -99.0f ? @"  --  "
                                       : [NSString stringWithFormat:@"%.1f", (double)_splRms];
+    NSString *avg = _splAvg <= -99.0f ? @"  --  "
+                                      : [NSString stringWithFormat:@"%.1f", (double)_splAvg];
     NSString *peak = _splPeak <= -99.0f ? @"  --  "
                                         : [NSString stringWithFormat:@"%.1f", (double)_splPeak];
     NSMutableAttributedString *text = [[NSMutableAttributedString alloc] initWithString:@"SPL " attributes:dimAttrs];
     [text appendAttributedString:[[NSAttributedString alloc] initWithString:rms attributes:inkAttrs]];
     [text appendAttributedString:[[NSAttributedString alloc]
-        initWithString:@" dB · MAX " attributes:dimAttrs]];
+        initWithString:@" dB · AVG " attributes:dimAttrs]];
+    [text appendAttributedString:[[NSAttributedString alloc] initWithString:avg attributes:inkAttrs]];
+    [text appendAttributedString:[[NSAttributedString alloc]
+        initWithString:@" · MAX " attributes:dimAttrs]];
     [text appendAttributedString:[[NSAttributedString alloc] initWithString:peak attributes:inkAttrs]];
     [text appendAttributedString:[[NSAttributedString alloc] initWithString:@" dB" attributes:inkAttrs]];
     if (_splTruePeakDb > -99.0f) {
@@ -1312,6 +1324,24 @@ static NSString *noteName(double f) {
             initWithString:[NSString stringWithFormat:@" (%.1f dBFS PK · %.1f dBFS RMS)",
                                                      (double)_splTruePeakDb, (double)_splRmsDbFS]
                              attributes:dimAttrs]];
+    }
+
+    // Warning colour: amber at the threshold, red 5 dB above it.
+    if (_splWarn >= 50.0f) {
+        NSColor *warnColor = nil;
+        NSString *warnTag = nil;
+        if (_splRms >= _splWarn + 5.0f) {
+            warnColor = NSColor.systemRedColor;
+            warnTag = @"  ⚠️ HIGH";
+        } else if (_splRms >= _splWarn) {
+            warnColor = NSColor.systemOrangeColor;
+            warnTag = @"  ⚠";
+        }
+        if (warnColor && warnTag) {
+            NSDictionary *warnAttrs = textAttrs(labelFont(NSFontWeightSemibold), warnColor);
+            [text appendAttributedString:[[NSAttributedString alloc] initWithString:warnTag
+                                                                          attributes:warnAttrs]];
+        }
     }
 
     const NSSize sz = text.size;

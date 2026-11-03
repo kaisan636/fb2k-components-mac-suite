@@ -141,9 +141,14 @@ constexpr int      kDefaultStereoMode = StereoMono;
 constexpr int      kDefaultWindow     = WindowBlackmanHarris;
 // SPL readout overlay. The offset is the calibrated dB SPL the headphones
 // produce at 0 dBFS digital full scale, in 0.1 dB steps (960 = 96.0 dB SPL);
-// displayed SPL = offset + level dBFS + playback volume dB.
+// displayed SPL = offset + level dBFS + playback volume dB. The default was
+// recalibrated empirically against a phone SPL app (was 960): a 15 dB lower
+// reading matched real listening levels.
 constexpr bool     kDefaultSplShow        = false;
-constexpr int      kDefaultSplOffsetTenths = 960;
+constexpr int      kDefaultSplOffsetTenths = 810;
+// Warning threshold: the readout line turns amber at this SPL and red 5 dB
+// above it. NIOSH's recommended exposure limit is 85 dB(A) over 8 hours.
+constexpr int      kDefaultSplWarnDb      = 85;
 constexpr int      kFftSizes[]        = { 1024, 2048, 4096, 8192, 16384, 32768 };
 constexpr int      kDefaultCurveOctaveFraction = 0;  // Curve detail: 0 = full, N = 1/N-octave smoothing
 constexpr int      kCurveOctaveFractions[] = { 0, 24, 12, 6, 3 };  // popup order
@@ -203,6 +208,7 @@ static const char* const kKeyBarColorDark   = "bar_color_dark";
 static const char* const kKeyBgColorDark    = "bg_color_dark";
 static const char* const kKeySplShow        = "spl_show";
 static const char* const kKeySplOffsetTenths = "spl_offset_tenths";
+static const char* const kKeySplWarnDb      = "spl_warn_db";
 
 // Notification posted when preferences change so live views can reload.
 // Guarded so this header stays includable from pure C++ translation units.
@@ -311,6 +317,11 @@ inline float getSplOffsetDb() {
 }
 inline void setSplShow(bool show) {
     setConfigBool(kKeySplShow, show);
+}
+
+// Warning threshold for the readout colour, in dB SPL.
+inline int getSplWarnDb() {
+    return (int)std::max<int64_t>(50, std::min<int64_t>(getConfigInt(kKeySplWarnDb, kDefaultSplWarnDb), 110));
 }
 
 } // namespace spectrum_config

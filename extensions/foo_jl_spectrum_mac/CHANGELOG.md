@@ -6,12 +6,16 @@ All notable changes to Spectrum Analyzer will be documented in this file.
 
 ### Added
 - **SPL readout overlay** (right-click → "Show SPL Readout"): one line at the
-  top-left showing broadband RMS in dB SPL and the held MAX (true peak) since
-  the last reset, plus raw dBFS readings. Displayed SPL = calibration offset +
-  level dBFS + playback volume dB; the offset defaults to 96.0 dB SPL at
-  0 dBFS (`spl_offset_tenths` in the config store). The MAX resets on track
-  change, on stop, or via right-click → "Reset SPL Peak". The meter reads the
-  visualisation stream only, so playback is never touched.
+  top-left showing broadband RMS in dB SPL, the session power **AVG** and the
+  held **MAX** (true peak) since the last reset, plus raw dBFS readings.
+  Displayed SPL = calibration offset + level dBFS + playback volume dB. The
+  offset was recalibrated empirically against a phone SPL app: default is now
+  81.0 dB SPL at 0 dBFS (`spl_offset_tenths`, was 96.0). The AVG and MAX reset
+  on track change, on stop, or via right-click → "Reset SPL Peak". The meter
+  reads the visualisation stream only, so playback is never touched.
+- **Warning colours**: the line turns amber when the live SPL reaches the
+  warning threshold (default 85 dB SPL, key `spl_warn_db`) and red with a
+  "HIGH" tag 5 dB above it.
 
 ## [1.1.0] - 2026-10-30
 
