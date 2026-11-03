@@ -489,7 +489,7 @@ public:
         return flag_on_playback_new_track | flag_on_playback_stop;
     }
     void on_playback_new_track(metadb_handle_ptr) override { resetAll(); }
-    void on_playback_stop(play_control::stop_reason) override { resetAll(); }
+    void on_playback_stop(play_control::t_stop_reason) override { resetAll(); }
     void on_playback_starting(play_control::t_track_command, bool) override {}
     void on_playback_seek(double) override {}
     void on_playback_pause(bool) override {}
